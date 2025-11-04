@@ -6,10 +6,13 @@ class HTMLNode():
         self.props: dict[str, str] = props
 
     def __repr__(self):
-        return f'<{self.tag}> value:{self.value} props:{self.props} children:{self.children}'
+        html = self.to_html()
+        return html
 
-    def to_html(self):
-        raise NotImplementedError
+    def to_html(self) -> str:
+        props = '' if self.props is None else f' {self.props_to_html()}'
+        content = self.value if self.children is None else f'{self.children!r}'
+        return f'<{self.tag}{props}>{content}</{self.tag}'
 
     def props_to_html(self):
         if self.props is None:

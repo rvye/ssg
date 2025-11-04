@@ -14,19 +14,6 @@ class TestHTMLNode(unittest.TestCase):
         node.props = {"href": "https://www.google.com"}
         self.assertEqual(node.props_to_html(), 'href="https://www.google.com"')
 
-    def test_to_html_raises_error(self):
-        node = HTMLNode()
-        with self.assertRaises(NotImplementedError):
-            node.to_html()
-
-    def test_repr(self):
-        node = HTMLNode()
-        node.tag = "p"
-        node.value = "This is a paragraph."
-        node.children = []
-        node.props = {"class": "my-class"}
-        self.assertEqual(repr(node), "<p> value:This is a paragraph. props:{'class': 'my-class'} children:[]")
-
     def test_leaf_node_to_html(self):
         node = LeafNode("p", "This is a paragraph.")
         self.assertEqual(node.to_html(), "<p>This is a paragraph.</p>")
