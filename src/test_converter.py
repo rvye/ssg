@@ -1,8 +1,21 @@
 import unittest
 
 from textnode import TextNode, TextType
-from htmlnode import LeafNode
-from converter import text_node_to_html_node, split_nodes_delimiter, extract_markdown_images, extract_markdown_links, split_nodes_image, split_nodes_link, text_to_textnodes
+from htmlnode import LeafNode, ParentNode
+from converter import (
+    text_node_to_html_node, 
+    split_nodes_delimiter, 
+    extract_markdown_images, 
+    extract_markdown_links, 
+    split_nodes_image, 
+    split_nodes_link, 
+    text_to_textnodes, 
+    markdown_to_blocks,
+    block_to_block_type,
+    markdown_to_html_node,
+    extract_title,
+    BlockType
+)
 
 
 class TestConverter(unittest.TestCase):
@@ -10,7 +23,7 @@ class TestConverter(unittest.TestCase):
         text_node = TextNode("This is a plain text", TextType.PLAIN)
         html_node = text_node_to_html_node(text_node)
         self.assertIsInstance(html_node, LeafNode)
-        self.assertEqual(html_node.tag, "p")
+        self.assertEqual(html_node.tag, "span")
         self.assertEqual(html_node.value, "This is a plain text")
 
     def test_bold_text_node(self):
@@ -211,6 +224,284 @@ class TestConverter(unittest.TestCase):
         text = ""
         nodes = text_to_textnodes(text)
         self.assertEqual(nodes, [TextNode("", TextType.PLAIN)])
+
+
+    # BLOCKS TEST
+    def test_markdown_to_blocks(self):
+        markdown = """
+# This is a heading
+
+This is a paragraph of text. It has some **bold** and _italic_ words inside of it.
+
+* This is the first list item in a list block
+* This is a list item
+* This is another list item
+        """
+
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [
+            "# This is a heading",
+            "This is a paragraph of text. It has some **bold** and _italic_ words inside of it.",
+            """* This is the first list item in a list block\n* This is a list item\n* This is another list item""",
+        ])
+
+    def test_markdown_to_blocks_multiple_paragraphs(self):
+        markdown = """
+This is the first paragraph.
+
+This is the second paragraph. It has some **bold** text.
+
+And this is the third paragraph.
+        """
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [
+            "This is the first paragraph.",
+            "This is the second paragraph. It has some **bold** text.",
+            "And this is the third paragraph.",
+        ])
+
+    def test_markdown_to_blocks_mixed_content(self):
+        markdown = """
+# Heading 1
+
+This is a paragraph.
+
+```
+Code block
+```
+
+> This is a quote.
+
+- List item 1
+- List item 2
+        """
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [
+            "# Heading 1",
+            "This is a paragraph.",
+            "```\nCode block\n```",
+            "> This is a quote.",
+            """- List item 1\n- List item 2""",
+        ])
+
+    def test_markdown_to_blocks_leading_trailing_newlines_spaces(self):
+        markdown = """
+
+        # Heading with spaces
+
+    This is a paragraph with leading spaces.
+
+
+        """
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [
+            "# Heading with spaces",
+            "This is a paragraph with leading spaces.",
+        ])
+
+    def test_markdown_to_blocks_empty_string(self):
+        markdown = ""
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [])
+
+    def test_markdown_to_blocks_only_newlines(self):
+        markdown = """
+
+
+        """
+        blocks = markdown_to_blocks(markdown)
+        self.assertEqual(blocks, [])
+
+    # BLOCK_TO_BLOCK_TYPE
+    def test_block_to_block_type_heading(self):
+        block = "# Heading 1"
+        self.assertEqual(block_to_block_type(block), BlockType.HEADING)
+
+    def test_block_to_block_type_code(self):
+        block = "```\nCode block\n```"
+        self.assertEqual(block_to_block_type(block), BlockType.CODE)
+
+    def test_block_to_block_type_quote(self):
+        block = "> This is a quote."
+        self.assertEqual(block_to_block_type(block), BlockType.QUOTE)
+
+    def test_block_to_block_type_unordered_list(self):
+        block = "- List item 1\n- List item 2"
+        self.assertEqual(block_to_block_type(block), BlockType.UNORDERED_LIST)
+
+    def test_block_to_block_type_ordered_list(self):
+        block = "1. List item 1\n2. List item 2"
+        self.assertEqual(block_to_block_type(block), BlockType.ORDERED_LIST)
+
+    def test_block_to_block_type_paragraph(self):
+        block = "This is a paragraph."
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_invalid_heading(self):
+        block = "####### Invalid Heading"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_invalid_quote(self):
+        block = "> This is a quote.\nThis is not a quote."
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_invalid_unordered_list(self):
+        block = "- List item 1\nThis is not a list item."
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_invalid_ordered_list(self):
+        block = "1. List item 1\n3. List item 2"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_markdown_to_html_node_paragraph(self):
+        markdown = "This is a simple paragraph."
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [
+                ParentNode(
+                    "p",
+                    [
+                        LeafNode("span", "This is a simple paragraph.")
+                    ],
+                )
+            ],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_markdown_to_html_node_heading(self):
+        markdown = "## This is a heading"
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [
+                ParentNode(
+                    "h2",
+                    [LeafNode("span", "This is a heading")],
+                )
+            ],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_markdown_to_html_node_code(self):
+        markdown = """```code block```"""
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [ParentNode("pre", [LeafNode("code", "code block")])],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_markdown_to_html_node_quote(self):
+        markdown = "> quote line 1\n> quote line 2"
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [
+                ParentNode(
+                    "blockquote",
+                    [
+                        LeafNode("span", "quote line 1 quote line 2")
+                    ],
+                )
+            ],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+    
+    def test_markdown_to_html_node_unordered_list(self):
+        markdown = "* item 1\n* item 2"
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [
+                ParentNode(
+                    "ul",
+                    [
+                        ParentNode("li", [LeafNode("span", "item 1")]),
+                        ParentNode("li", [LeafNode("span", "item 2")]),
+                    ],
+                )
+            ],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_markdown_to_html_node_ordered_list(self):
+        markdown = "1. item 1\n2. item 2"
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode(
+            "div",
+            [
+                ParentNode(
+                    "ol",
+                    [
+                        ParentNode("li", [LeafNode("span", "item 1")]),
+                        ParentNode("li", [LeafNode("span", "item 2")]),
+                    ],
+                )
+            ],
+        )
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_markdown_to_html_node_mixed(self):
+        markdown = '''
+# Welcome
+
+This is a paragraph with **bold** and _italic_ text.
+
+- list item 1
+- list item 2
+
+Check this out:
+
+1. One
+2. Two
+'''
+        node = markdown_to_html_node(markdown)
+        expected = ParentNode("div", [
+            ParentNode("h1", [LeafNode("span", "Welcome")]),
+            ParentNode("p", [
+                LeafNode("span", "This is a paragraph with "),
+                LeafNode("b", "bold"),
+                LeafNode("span", " and "),
+                LeafNode("i", "italic"),
+                LeafNode("span", " text."),
+            ]),
+            ParentNode("ul", [
+                ParentNode("li", [LeafNode("span", "list item 1")]),
+                ParentNode("li", [LeafNode("span", "list item 2")]),
+            ]),
+            ParentNode("p", [LeafNode("span", "Check this out:")]),
+            ParentNode("ol", [
+                ParentNode("li", [LeafNode("span", "One")]),
+                ParentNode("li", [LeafNode("span", "Two")]),
+            ]),
+        ])
+        
+        self.assertEqual(node.to_html(), expected.to_html())
+
+    def test_extract_title(self):
+        markdown = "# This is a title"
+        title = extract_title(markdown)
+        self.assertEqual(title, "This is a title")
+
+        markdown = "# This is a title with spaces   "
+        title = extract_title(markdown)
+        self.assertEqual(title, "This is a title with spaces")
+
+        markdown_no_title = "This is a paragraph without a title."
+        with self.assertRaises(Exception) as cm:
+            extract_title(markdown_no_title)
+        self.assertEqual("no # header", str(cm.exception))
+
+        markdown_not_h1 = "## This is not a title"
+        with self.assertRaises(Exception) as cm:
+            extract_title(markdown_not_h1)
+        self.assertEqual("no # header", str(cm.exception))
+
+        markdown_with_content_before = "This is a paragraph.\n# This is a title"
+        with self.assertRaises(Exception) as cm:
+            extract_title(markdown_with_content_before)
+        self.assertEqual("no # header", str(cm.exception))
 
 if __name__ == "__main__":
     unittest.main()
